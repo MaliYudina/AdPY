@@ -1,0 +1,5 @@
+start Здесь мы пишем что угодно, чтобы проверить длину строки. Если она больше 
+79 символов (PEP8 says: Limit all lines to a maximum of 79 characters. The limi
+ts are chosen to avoid wrapping in editors with the window width set to 80, то 
+она должна перенестись на следующую строчку
+
