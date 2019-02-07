@@ -4,52 +4,68 @@ import imaplib
 from email.MIMEText import MIMEText
 from email.MIMEMultipart import MIMEMultipart
 
-
-GMAIL_SMTP = "smtp.gmail.com"
-GMAIL_IMAP = "imap.gmail.com"
-
-l = 'login@gmail.com'
-passwORD = 'qwerty'
-subject = 'Subject'
-recipients = ['vasya@email.com', 'petya@email.com']
-message = 'Message'
-header = None
+SMTPS_PORT = 587
+LAST_ELEMENT = -1
 
 
-#send message
-msg = MIMEMultipart()
-msg['From'] = l
-msg['To'] = ', '.join(recipients)
-msg['Subject'] = subject
-msg.attach(MIMEText(message))
+class EmailManager:
+    def __init__(self, smtp_host, imap_host, login, password):
+        self.smtp_host = smtp_host
+        self.imap_host = imap_host
+        self.login = login
+        self.password = password
 
-ms = smtplib.SMTP(GMAIL_SMTP, 587)
-# identify ourselves to smtp gmail client
-ms.ehlo()
-# secure our email with tls encryption
-ms.starttls()
-# re-identify ourselves as an encrypted connection
-ms.ehlo()
+    def send(self, recipients, subject, message):
+        msg = MIMEMultipart()
+        msg['From'] = self.login
+        msg['To'] = ', '.join(recipients)
+        msg['Subject'] = subject
+        msg.attach(MIMEText(message))
 
-ms.login(l, passwORD)
-ms.sendmail(l,
-ms, msg.as_string())
+        transport = smtplib.SMTP(self.smtp_host, SMTPS_PORT)
+        try:
+            # identify ourselves to smtp gmail client
+            transport.ehlo()
+            # secure our email with tls encryption
+            transport.starttls()
+            # re-identify ourselves as an encrypted connection
+            transport.ehlo()
 
-ms.quit()
-#send end
+            transport.login(self.login, self.password)
+            transport.sendmail(
+                self.login,
+                transport,
+                msg.as_string())
+        finally:
+            transport.quit()
 
+    @staticmethod
+    def _search(transport, terms):
+        _, messages = transport.uid('search', None, terms)
+        if not messages[0]:  # Ошибка в коде?
+            raise ValueError(
+                'There are no letters with current header')
+        return messages
 
-#recieve
-mail = imaplib.IMAP4_SSL(GMAIL_IMAP)
-mail.login(l, passwORD)
-mail.list()
-mail.select("inbox")
-criterion = '(HEADER Subject "%s")' % header if header else 'ALL'
-result, data = mail.uid('search', None, criterion)
-assert data[0], 'There are no letters with current header'
-latest_email_uid = data[0].split()[-1]
-result, data = mail.uid('fetch', latest_email_uid, '(RFC822)')
-raw_email = data[0][1]
-email_message = email.message_from_string(raw_email)
-mail.logout()
-#end recieve
+    @staticmethod
+    def _fetch_first_by_uid(transport, uid):
+        _, message = transport.uid('fetch', uid, '(RFC822)')
+        message_body = message[0][1]
+        return email.message_from_string(message_body)
+
+    def read(self, header=None, inbox_name='inbox'):
+        search_term = '(HEADER Subject "%s")' % header if header else 'ALL'
+        transport = imaplib.IMAP4_SSL(self.imap_host)
+
+        try:
+            transport.login(self.login, self.password)
+            transport.list()
+            transport.select(inbox_name)
+            messages = self._search(transport, search_term)
+            latest_uid = messages[0].split()[LAST_ELEMENT]
+            email_message = self._fetch_first_by_uid(
+                transport, latest_uid)
+        finally:
+            transport.logout()
+
+        return email_message
