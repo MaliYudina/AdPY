@@ -36,8 +36,8 @@ def create_db():  # create table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS student_course (
                     id serial PRIMARY KEY,
-                    student_id bigint REFERENCES student(id),
-                    course_id bigint REFERENCES course(id)
+                    student_id bigint REFERENCES student(id) ON DELETE CASCADE,
+                    course_id bigint REFERENCES course(id) ON DELETE CASCADE
                 )
                 """)
 
@@ -60,15 +60,26 @@ def get_students(course_id):  # get students of the chosen course
 def _add_student(student, cursor):
     cursor.execute("""
        INSERT into student (name, gpa, birth) values (%s, %s, %s) 
-       returning id 
+       returning id  
        """, (student['name'], student['gpa'], student['birth']))
-    return cursor.fetchone()[0]
+# TODO Будет удобнее, если add_student будет возвращать id
+# созданного студента. В 90% случаев это пригодится.
+
+    student_id = cursor.fetchone()[0]
+    return student_id
 
 
 def add_students(course_id, students):  # create students and write them into course table
     student_ids = []
     with pg.connect(CONNSTR) as conn:
         with conn.cursor() as cur:
+            cur.execute(
+                """SELECT course_id FROM student_course WHERE course_id = %s""",
+                (course_id, ))
+            if cur.fetchone() is None:
+                raise RuntimeError(
+                    f'The current course does not exist')
+
             for student in students:
                 student_ids.append(
                     _add_student(student, cur))
@@ -103,7 +114,7 @@ def get_student(student_id):
             cur.execute("""
                 select * from student where student.id = (%s);
                 """, (student_id,))
-            return cur.fetchall()
+            return cur.fetchone()
 
 
 if __name__ == '__main__':
