@@ -62,9 +62,6 @@ def _add_student(student, cursor):
        INSERT into student (name, gpa, birth) values (%s, %s, %s) 
        returning id  
        """, (student['name'], student['gpa'], student['birth']))
-# TODO Будет удобнее, если add_student будет возвращать id
-# созданного студента. В 90% случаев это пригодится.
-
     student_id = cursor.fetchone()[0]
     return student_id
 
